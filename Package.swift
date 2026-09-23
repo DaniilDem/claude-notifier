@@ -16,10 +16,20 @@ let package = Package(
             path: "Sources/BundleHook",
             publicHeadersPath: "include"
         ),
+        .target(
+            name: "ClaudeHook",
+            path: "Sources/ClaudeHook"
+        ),
+        .testTarget(
+            name: "ClaudeHookTests",
+            dependencies: ["ClaudeHook"],
+            path: "Tests/ClaudeHookTests"
+        ),
         .executableTarget(
             name: "alerter",
             dependencies: [
                 "BundleHook",
+                "ClaudeHook",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ],
             path: "Sources/Alerter",
