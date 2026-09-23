@@ -25,3 +25,11 @@ func parse(_ json: String) throws -> HookInput {
 @Test func rejectsGarbage() {
     #expect(HookInput.parse(Data("nope".utf8)) == nil)
 }
+
+@Test func preToolUseInteractiveOnlyForAskUserQuestion() throws {
+    let question = try parse(#"{"hook_event_name":"PreToolUse","session_id":"s","tool_name":"AskUserQuestion"}"#)
+    #expect(question.isInteractiveEvent)
+
+    let other = try parse(#"{"hook_event_name":"PreToolUse","session_id":"s","tool_name":"Bash"}"#)
+    #expect(!other.isInteractiveEvent)
+}

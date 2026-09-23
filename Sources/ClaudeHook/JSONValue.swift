@@ -3,6 +3,8 @@ import Foundation
 /// JSON-значение без `Any`: tool_input хука нужно прочитать и вернуть обратно с изменениями.
 public enum JSONValue: Codable, Equatable, Sendable {
     case string(String)
+    // ponytail: integers above 2^53 lose precision as Double; fine for AskUserQuestion/Bash
+    // inputs we handle, switch to Decimal if that ever matters.
     case number(Double)
     case bool(Bool)
     case object([String: JSONValue])

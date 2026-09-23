@@ -2,7 +2,8 @@ import Foundation
 
 public enum Transcript {
     /// Последний текстовый запрос пользователя из JSONL-транскрипта Claude Code.
-    /// Пропускает tool_result, служебные (isMeta) записи и вставки вида `<ide_selection>`.
+    /// Пропускает tool_result, служебные (isMeta) записи, сгенерированные сжатые
+    /// сводки (isCompactSummary) и вставки вида `<ide_selection>`.
     public static func lastUserPrompt(jsonl: String) -> String? {
         let decoder = JSONDecoder()
         // "\n", а не isNewline: U+2028 может стоять внутри JSON-строки без экранирования.
@@ -10,6 +11,7 @@ public enum Transcript {
             guard let entry = try? decoder.decode(JSONValue.self, from: Data(line.utf8)),
                   entry["type"] == .string("user"),
                   entry["isMeta"] != .bool(true),
+                  entry["isCompactSummary"] != .bool(true),
                   let content = entry["message"]?["content"],
                   let text = promptText(content) else { continue }
             return text
@@ -29,6 +31,8 @@ public enum Transcript {
         }
         return texts
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            // Блоки, начинающиеся с "<", — обёртки IDE/команд (`<ide_selection>`, `<command-name>`
+            // и т.п.), а не то, что напечатал пользователь, поэтому пропускаем их намеренно.
             .first { !$0.isEmpty && !$0.hasPrefix("<") }
     }
 }

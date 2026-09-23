@@ -25,6 +25,12 @@ private let permissionJSON = #"{"hook_event_name":"PermissionRequest","session_i
     #expect(output?["updatedInput"]?["questions"] != nil)
 }
 
+@Test func questionIgnoresUnrelatedChoice() throws {
+    let input = try parse(questionJSON)
+    let spec = try #require(Presenter.spec(for: input, lastUserPrompt: nil))
+    #expect(HookResponse.json(for: spec, input: input, chosen: "Allow") == nil)
+}
+
 @Test func laterAndInfoGiveNoOutput() throws {
     let question = try parse(questionJSON)
     let questionSpec = try #require(Presenter.spec(for: question, lastUserPrompt: nil))

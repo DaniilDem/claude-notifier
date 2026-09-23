@@ -32,9 +32,12 @@ enum HookRunner {
     }
 
     private static func present(_ input: HookInput) -> Never {
-        let prompt = input.transcriptPath
-            .flatMap { try? String(contentsOfFile: $0, encoding: .utf8) }
-            .flatMap(Transcript.lastUserPrompt(jsonl:))
+        // Транскрипт нужен только для подзаголовка Stop — не читаем его для остальных событий.
+        let prompt = input.hookEventName == "Stop"
+            ? input.transcriptPath
+                .flatMap { try? String(contentsOfFile: $0, encoding: .utf8) }
+                .flatMap(Transcript.lastUserPrompt(jsonl:))
+            : nil
         guard let spec = Presenter.spec(for: input, lastUserPrompt: prompt) else { exit(0) }
 
         let hasClaudeApp = NSWorkspace.shared.urlForApplication(withBundleIdentifier: claudeBundleID) != nil

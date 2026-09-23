@@ -28,7 +28,8 @@ public struct HookInput: Decodable, Sendable {
     }
 
     /// События, на которые хук может ответить решением — для них ждём клика.
+    /// PreToolUse интерактивен только для AskUserQuestion: остальные PreToolUse — не наш хук.
     public var isInteractiveEvent: Bool {
-        hookEventName == "PermissionRequest" || hookEventName == "PreToolUse"
+        hookEventName == "PermissionRequest" || (hookEventName == "PreToolUse" && toolName == "AskUserQuestion")
     }
 }

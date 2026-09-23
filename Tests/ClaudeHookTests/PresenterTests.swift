@@ -31,11 +31,29 @@ let questionJSON = #"{"hook_event_name":"PreToolUse","session_id":"s1","cwd":"/p
     #expect(spec.closeLabel == "Deny")
     #expect(spec.timeout == 45)
     #expect(spec.blocking)
+    #expect(spec.group == nil)
 }
 
 @Test func permissionFallsBackToJSON() throws {
     let input = try parse(#"{"hook_event_name":"PermissionRequest","session_id":"s","tool_name":"mcp__x","tool_input":{"foo":"bar"}}"#)
     #expect(Presenter.spec(for: input, lastUserPrompt: nil)?.message == #"{"foo":"bar"}"#)
+}
+
+@Test func permissionForAskUserQuestionIsIgnored() throws {
+    let input = try parse(#"{"hook_event_name":"PermissionRequest","session_id":"s","tool_name":"AskUserQuestion","tool_input":{"questions":[]}}"#)
+    #expect(Presenter.spec(for: input, lastUserPrompt: nil) == nil)
+}
+
+@Test func permissionWithLongDescriptionFallsBackToInfo() throws {
+    let longCommand = String(repeating: "a", count: 300)
+    let input = try parse(#"{"hook_event_name":"PermissionRequest","session_id":"s1","cwd":"/p/app","tool_name":"Bash","tool_input":{"command":"\#(longCommand)"}}"#)
+    let spec = try #require(Presenter.spec(for: input, lastUserPrompt: nil))
+    #expect(spec.kind == .info)
+    #expect(spec.title == "Нужно разрешение · app")
+    #expect(spec.subtitle == "Bash")
+    #expect(spec.sound == "Ping")
+    #expect(spec.group == "claude-s1")
+    #expect(!spec.blocking)
 }
 
 @Test func questionShowsOptions() throws {
@@ -46,6 +64,12 @@ let questionJSON = #"{"hook_event_name":"PreToolUse","session_id":"s1","cwd":"/p
     #expect(spec.dropdownLabel == "Ответить")
     #expect(spec.closeLabel == "Позже")
     #expect(spec.blocking)
+}
+
+@Test func questionWithLaterOptionFallsBackToInfo() throws {
+    let json = #"{"hook_event_name":"PreToolUse","session_id":"s","cwd":"/p/app","tool_name":"AskUserQuestion","tool_input":{"questions":[{"question":"Когда?","options":[{"label":"Сейчас"},{"label":"Позже"}]}]}}"#
+    let spec = try #require(Presenter.spec(for: try parse(json), lastUserPrompt: nil))
+    #expect(spec.kind == .info)
 }
 
 @Test func multiQuestionFallsBackToInfo() throws {
