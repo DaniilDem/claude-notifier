@@ -24,7 +24,11 @@ mv "$BIN.tmp" "$BIN"
 
 # Register Stop + Notification hooks: keep all other hooks, replace old claude-notifier entries.
 # JavaScript for Automation ships with macOS (python3 may be missing) and keeps key order.
-[ -f "$SETTINGS" ] && cp "$SETTINGS" "$SETTINGS.bak-claude-notifier"
+backup=""
+if [ -f "$SETTINGS" ]; then
+  backup="$SETTINGS.bak-claude-notifier"
+  cp "$SETTINGS" "$backup"
+fi
 js=$(mktemp -t claude-notifier)
 trap 'rm -f "$js"' EXIT
 cat > "$js" <<'EOF'
@@ -58,4 +62,4 @@ printf '{"hook_event_name":"Stop","session_id":"install-check","cwd":"%s","last_
 
 echo "claude-notifier installed: $BIN"
 echo "A test notification should appear now. If it doesn't: System Settings → Notifications → terminal-notifier → Allow."
-echo "Hooks registered in $SETTINGS (backup: $SETTINGS.bak-claude-notifier)."
+echo "Hooks registered in $SETTINGS${backup:+ (backup: $backup)}."
