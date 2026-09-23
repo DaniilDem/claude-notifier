@@ -1,0 +1,1 @@
+{"hook_event_name":"PreToolUse","session_id":"00000000-0000-0000-0000-000000000000","cwd":"/Users/me/projects/app","tool_name":"AskUserQuestion","tool_input":{"questions":[{"question":"Какой цвет?","header":"Цвет","multiSelect":false,"options":[{"label":"Красный","description":"a"},{"label":"Синий","description":"b"}]}]}}
