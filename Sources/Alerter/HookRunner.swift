@@ -5,32 +5,15 @@ import ClaudeHook
 /// `alerter hook` — уведомления для хуков Claude Code. См. docs/superpowers/specs/2026-09-23-claude-notifier-design.md.
 enum HookRunner {
     static let vscodeBundleID = "com.microsoft.VSCode"
+    static let terminalNotifier = "/opt/homebrew/bin/terminal-notifier"
 
     static func run(arguments: [String]) -> Never {
-        // Фоновая копия для неблокирующих событий: payload во временном файле.
-        if arguments.count == 2, arguments[0] == "--payload" {
-            let file = URL(fileURLWithPath: arguments[1])
-            let data = try? Data(contentsOf: file)
-            try? FileManager.default.removeItem(at: file)
-            guard let data, let input = HookInput.parse(data) else { exit(0) }
-            present(input)
-        }
-
         let data = FileHandle.standardInput.readDataToEndOfFile()
         guard let input = HookInput.parse(data) else { exit(0) }
         if input.isInteractiveEvent,
            NSWorkspace.shared.frontmostApplication?.bundleIdentifier == vscodeBundleID {
             exit(0) // пользователь смотрит на VS Code — пусть ответит там
         }
-        guard let spec = Presenter.spec(for: input, lastUserPrompt: nil) else { exit(0) }
-        if spec.blocking {
-            present(input)
-        }
-        spawnBackground(payload: data)
-        exit(0)
-    }
-
-    private static func present(_ input: HookInput) -> Never {
         // Транскрипт нужен только для подзаголовка Stop — не читаем его для остальных событий.
         let prompt = input.hookEventName == "Stop"
             ? input.transcriptPath
@@ -38,9 +21,47 @@ enum HookRunner {
                 .flatMap(Transcript.lastUserPrompt(jsonl:))
             : nil
         guard let spec = Presenter.spec(for: input, lastUserPrompt: prompt) else { exit(0) }
+        if spec.blocking {
+            present(spec, input: input)
+        }
+        let projectDir = ProcessInfo.processInfo.environment["CLAUDE_PROJECT_DIR"] ?? input.cwd
+        notifyViaTerminalNotifier(spec, sessionId: input.sessionId, projectDir: projectDir)
+        exit(0)
+    }
 
-        // Не Claude.app: с его bundle id NSUserNotificationCenter не присылает делегату
-        // ни доставку, ни клики — процесс висит без таймаута (проверено на macOS 15).
+    /// Неблокирующие уведомления показывает terminal-notifier: это отдельное приложение со своими
+    /// разрешениями. Подмена отправителя в NSUserNotification на macOS 15 ненадёжна: от имени
+    /// VS Code/Terminal баннер не показывается, от имени Claude/terminal-notifier не приходят клики.
+    private static func notifyViaTerminalNotifier(_ spec: NotificationSpec, sessionId: String, projectDir: String?) {
+        guard FileManager.default.isExecutableFile(atPath: terminalNotifier),
+              let url = chatURL(sessionId: sessionId) else { return }
+        // vscode:// уходит в последнее активное окно VS Code; в окне с другой папкой сессии нет
+        // и расширение создаёт новый чат. Поэтому сначала выводим окно проекта сессии.
+        var onClick = "open \(shellQuoted(url.absoluteString))"
+        if let projectDir, vscodeHasWindow(forFolder: projectDir) {
+            onClick = "open -a 'Visual Studio Code' \(shellQuoted(projectDir)) && sleep 1 && " + onClick
+        }
+        var arguments = ["-title", spec.title, "-sound", spec.sound, "-execute", onClick]
+        if let subtitle = spec.subtitle { arguments += ["-subtitle", subtitle] }
+        if let group = spec.group { arguments += ["-group", group] }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: terminalNotifier)
+        process.arguments = arguments
+        // Текст через stdin: аргументы terminal-notifier разбираются как plist, и "(…" или "{…" ломаются.
+        let stdin = Pipe()
+        process.standardInput = stdin
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        guard (try? process.run()) != nil else { return }
+        stdin.fileHandleForWriting.write(Data(spec.message.utf8))
+        try? stdin.fileHandleForWriting.close()
+        process.waitUntilExit()
+    }
+
+    /// Кнопки ответа (PermissionRequest / AskUserQuestion). В settings.json не подключено:
+    /// на macOS 15 баннер от имени VS Code не показывается, пока VS Code активен.
+    private static func present(_ spec: NotificationSpec, input: HookInput) -> Never {
         _ = InstallFakeBundleIdentifierHook(vscodeBundleID)
 
         let manager = NotificationManager.shared
@@ -69,7 +90,9 @@ enum HookRunner {
     private static func handle(_ event: ActivationEvent, spec: NotificationSpec, input: HookInput) {
         switch event.type {
         case .contentsClicked:
-            openChat(sessionId: input.sessionId)
+            if let url = chatURL(sessionId: input.sessionId) {
+                NSWorkspace.shared.open(url)
+            }
         case .actionClicked, .closed:
             if let chosen = event.value, let json = HookResponse.json(for: spec, input: input, chosen: chosen) {
                 print(json)
@@ -79,30 +102,31 @@ enum HookRunner {
         }
     }
 
+    /// Есть ли в VS Code окно с этой папкой (по сохранённому состоянию окон). Без проверки
+    /// `open -a` создал бы новое окно — например, для чата из окна без папки (cwd = ~).
+    private static func vscodeHasWindow(forFolder folder: String) -> Bool {
+        let storage = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Code/User/globalStorage/storage.json")
+        guard let data = try? Data(contentsOf: storage),
+              let state = try? JSONDecoder().decode(JSONValue.self, from: data),
+              case .array(let windows)? = state["windowsState"]?["openedWindows"] else { return false }
+        let target = URL(fileURLWithPath: folder).standardized.path
+        return windows.contains { window in
+            window["folder"]?.stringValue.flatMap(URL.init(string:))?.standardized.path == target
+        }
+    }
+
+    private static func shellQuoted(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
     /// Обработчик `/open` расширения Claude Code для VS Code.
-    private static func openChat(sessionId: String) {
+    private static func chatURL(sessionId: String) -> URL? {
         var components = URLComponents()
         components.scheme = "vscode"
         components.host = "anthropic.claude-code"
         components.path = "/open"
         components.queryItems = [URLQueryItem(name: "session", value: sessionId)]
-        if let url = components.url {
-            NSWorkspace.shared.open(url)
-        }
-    }
-
-    private static func spawnBackground(payload: Data) {
-        let file = FileManager.default.temporaryDirectory
-            .appendingPathComponent("claude-notifier-\(UUID().uuidString).json")
-        guard (try? payload.write(to: file)) != nil,
-              let executable = Bundle.main.executableURL else { return }
-        let process = Process()
-        process.executableURL = executable
-        process.arguments = ["hook", "--payload", file.path]
-        // Не наследуем пайпы хука: иначе Claude Code ждал бы, пока фоновая копия завершится.
-        process.standardInput = FileHandle.nullDevice
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        try? process.run()
+        return components.url
     }
 }
