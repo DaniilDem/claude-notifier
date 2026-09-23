@@ -12,4 +12,9 @@ signal(SIGINT) { _ in
     exit(EXIT_FAILURE)
 }
 
+let arguments = Array(CommandLine.arguments.dropFirst())
+if arguments.first == "hook" {
+    HookRunner.run(arguments: Array(arguments.dropFirst()))
+}
+
 AlerterCommand.main()

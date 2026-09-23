@@ -25,6 +25,9 @@ class NotificationManager: NSObject, NSUserNotificationCenterDelegate {
     private var currentConfig: NotificationConfig?
     private var hasExited = false
 
+    /// Если задан, получает результат вместо печати в stdout (режим `hook`).
+    var onResult: ((ActivationEvent) -> Void)?
+
     // MARK: - Deliver
 
     func deliverNotification(config: NotificationConfig) {
@@ -258,8 +261,12 @@ class NotificationManager: NSObject, NSUserNotificationCenterDelegate {
     private func outputAndExit(event: ActivationEvent) {
         guard !hasExited else { return }
         hasExited = true
-        let output = OutputFormatter.format(event: event, asJSON: currentConfig?.outputJSON ?? false)
-        print(output, terminator: "")
+        if let onResult {
+            onResult(event)
+        } else {
+            let output = OutputFormatter.format(event: event, asJSON: currentConfig?.outputJSON ?? false)
+            print(output, terminator: "")
+        }
         exit(0)
     }
 
