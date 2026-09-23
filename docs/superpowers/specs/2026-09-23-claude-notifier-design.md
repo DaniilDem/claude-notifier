@@ -25,11 +25,10 @@ claude-notifier hook            # читает JSON хука Claude Code из st
 | Событие | matcher | timeout хука |
 |---|---|---|
 | `Stop` | — | 10 |
-| `Notification` | `idle_prompt\|elicitation_dialog` | 10 |
-| `PermissionRequest` | — | 60 |
-| `PreToolUse` | `AskUserQuestion` | 60 |
+| `Notification` | `permission_prompt\|idle_prompt\|elicitation_dialog` | 10 |
 
-`Notification` с `permission_prompt` не подключаем: это событие закрывает `PermissionRequest`.
+`PermissionRequest` (60) и `PreToolUse`/`AskUserQuestion` (60) — только если нужны кнопки;
+см. «Итог проверки на macOS 15».
 
 ## Что показываем
 
@@ -77,10 +76,19 @@ Claude Code (проверено в `extension.js` v2.1.280). Открывает 
 
 ## Неблокирующие события (Stop, Notification)
 
-Хук читает stdin, запускает свою копию в фоне (`Process`, отвязанный от родителя,
-payload передаётся через временный файл) и сразу выходит с кодом 0. Фоновая копия показывает
-уведомление с `timeout = 1800` и по клику открывает чат. `group` = `claude-<session_id>`,
-чтобы новое уведомление той же сессии заменяло старое.
+Показывает `/opt/homebrew/bin/terminal-notifier` (текст — через stdin, т.к. аргументы он
+разбирает как plist). По клику (`-execute`): если в VS Code открыто окно с папкой
+`$CLAUDE_PROJECT_DIR` (по `windowsState.openedWindows` в `storage.json`) — `open -a` выводит его,
+затем `open vscode://anthropic.claude-code/open?session=<id>`. Для чата в окне без папки
+ссылка уходит в последнее активное окно. `group` = `claude-<session_id>`.
+
+## Итог проверки на macOS 15 (2026-09-23)
+
+Подмена отправителя в NSUserNotification ненадёжна: от имени VS Code/Terminal баннер не
+показывается, от имени Claude.app/terminal-notifier делегат не получает ни доставку, ни клики.
+Поэтому неблокирующие уведомления идут через terminal-notifier, а блокирующие хуки
+(PermissionRequest, PreToolUse/AskUserQuestion) в `settings.json` не подключены — код остаётся,
+запросы разрешения приходят обычным уведомлением через `Notification` / `permission_prompt`.
 
 ## Ошибки
 

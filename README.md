@@ -1,5 +1,31 @@
 # Alerter
 
+## Claude Code hook mode (this fork)
+
+`alerter hook` reads a [Claude Code hook](https://code.claude.com/docs/en/hooks) payload from stdin
+and shows a notification with the task context: project, your last prompt, the start of Claude's answer.
+Clicking it focuses the VS Code window of the session's project and opens that chat.
+Notifications are delivered through [terminal-notifier](https://github.com/julienXX/terminal-notifier)
+(`brew install terminal-notifier`).
+
+```bash
+swift build -c release && cp .build/release/alerter ~/.claude/hooks/claude-notifier
+```
+
+`~/.claude/settings.json`:
+
+```json
+"Stop": [{ "hooks": [{ "type": "command", "command": "\"$HOME/.claude/hooks/claude-notifier\" hook", "timeout": 10 }] }],
+"Notification": [{ "matcher": "permission_prompt|idle_prompt|elicitation_dialog",
+                   "hooks": [{ "type": "command", "command": "\"$HOME/.claude/hooks/claude-notifier\" hook", "timeout": 10 }] }]
+```
+
+Allow/Deny and AskUserQuestion answer buttons are implemented (`PermissionRequest`,
+`PreToolUse` + `AskUserQuestion` hooks) but not recommended on macOS 15 — see
+`docs/superpowers/specs/2026-09-23-claude-notifier-design.md`.
+
+---
+
 Alerter is a command-line tool for sending macOS notifications (alerts), built with Swift and Swift Package Manager.
 The program exits when the user interacts with the alert or when it is dismissed, printing the result to stdout as plain text or JSON.
 
