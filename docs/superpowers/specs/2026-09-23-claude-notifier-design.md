@@ -41,7 +41,11 @@ claude-notifier hook            # читает JSON хука Claude Code из st
 | Stop | `Готово · <проект>` | первая строка последнего запроса пользователя | `last_assistant_message`, до 200 символов | нет | Glass |
 | Notification | `Нужен ответ · <проект>` | — | `message` из хука | нет | Ping |
 | PermissionRequest | `Разрешить? · <проект>` | `tool_name` | `tool_input.command` / `file_path` / `url`, иначе JSON `tool_input`, до 200 символов | Allow (action), Deny (close) | Ping |
-| AskUserQuestion | `Вопрос · <проект>` | `header` вопроса | `question` | варианты `label` (1 шт. — кнопка, больше — выпадающий список «Ответить»), close «Открыть чат» | Ping |
+| AskUserQuestion | `Вопрос · <проект>` | `header` вопроса | `question` | варианты `label` (1 шт. — кнопка, больше — выпадающий список «Ответить»), close «Позже» | Ping |
+
+Ограничение alerter: нажатие close-кнопки и смахивание уведомления неотличимы (оба — `closed` со
+значением close-кнопки). Поэтому смахнутый запрос разрешения = Deny (безопасная сторона),
+смахнутый вопрос = «Позже» (решения нет).
 
 `<проект>` — `basename(cwd)`. Последний запрос пользователя берём из `transcript_path`
 (последняя запись `type: "user"` с текстовым содержимым, не tool_result). Не нашли — subtitle пустой.
@@ -61,8 +65,8 @@ Claude Code (проверено в `extension.js` v2.1.280). Открывает 
    - Deny → решение «deny».
    - вариант вопроса → `PreToolUse` с `permissionDecision: "allow"` и `updatedInput` =
      исходный `tool_input` + `answers: { "<question>": "<label>" }`.
-   - клик по телу / «Открыть чат» → открыть чат, вывода нет.
-   - таймаут / закрыли → вывода нет.
+   - клик по телу → открыть чат, вывода нет.
+   - «Позже» / таймаут → вывода нет.
    «Нет вывода» = Claude показывает обычное окно в VS Code. Молча ничего не разрешается.
 
 Точный формат вывода обоих хуков и то, что Claude принимает `answers` из `updatedInput`,
