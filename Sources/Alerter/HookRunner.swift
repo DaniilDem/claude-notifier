@@ -6,8 +6,16 @@ import ClaudeHook
 enum HookRunner {
     static let vscodeBundleID = "com.microsoft.VSCode"
     static let terminalNotifier = "/opt/homebrew/bin/terminal-notifier"
+    /// Потолок работы хука: Claude Code ждёт его синхронно, зависание хука = зависание Claude.
+    static let hookDeadline: TimeInterval = 3
+    static let notifierTimeout: TimeInterval = 2
+    static let transcriptTailBytes: UInt64 = 512 * 1024
 
     static func run(arguments: [String]) -> Never {
+        // Сторож с фоновой очереди: что бы ни повисло (stdin, транскрипт, terminal-notifier), выходим.
+        let watchdog = DispatchWorkItem { exit(0) }
+        DispatchQueue.global().asyncAfter(deadline: .now() + hookDeadline, execute: watchdog)
+
         let data = FileHandle.standardInput.readDataToEndOfFile()
         guard let input = HookInput.parse(data) else { exit(0) }
         if input.isInteractiveEvent,
@@ -17,11 +25,15 @@ enum HookRunner {
         // Транскрипт нужен только для подзаголовка Stop — не читаем его для остальных событий.
         let prompt = input.hookEventName == "Stop"
             ? input.transcriptPath
-                .flatMap { try? String(contentsOfFile: $0, encoding: .utf8) }
+                .flatMap(transcriptTail)
                 .flatMap(Transcript.lastUserPrompt(jsonl:))
             : nil
         guard let spec = Presenter.spec(for: input, lastUserPrompt: prompt) else { exit(0) }
         if spec.blocking {
+            watchdog.cancel()
+            // Свой таймаут NotificationManager запускается только после «доставлено», а при сломанном
+            // отправителе оно не приходит — поэтому отдельный жёсткий предел.
+            DispatchQueue.global().asyncAfter(deadline: .now() + .seconds(spec.timeout + 5)) { exit(0) }
             present(spec, input: input)
         }
         let projectDir = ProcessInfo.processInfo.environment["CLAUDE_PROJECT_DIR"] ?? input.cwd
@@ -56,7 +68,31 @@ enum HookRunner {
         guard (try? process.run()) != nil else { return }
         stdin.fileHandleForWriting.write(Data(spec.message.utf8))
         try? stdin.fileHandleForWriting.close()
-        process.waitUntilExit()
+
+        // Не waitUntilExit: зависший terminal-notifier держал бы хук, а значит и Claude.
+        let deadline = Date().addingTimeInterval(notifierTimeout)
+        while process.isRunning && Date() < deadline {
+            usleep(50_000)
+        }
+        if process.isRunning {
+            process.terminate()
+            usleep(200_000)
+            if process.isRunning {
+                kill(process.processIdentifier, SIGKILL)
+            }
+        }
+    }
+
+    /// Последние `transcriptTailBytes` транскрипта: файл бывает в десятки МБ, а нужен только последний
+    /// запрос. Первая строка хвоста обычно обрезана — Transcript пропустит её как невалидный JSON.
+    // ponytail: если последний запрос дальше 512 КБ от конца (огромные выводы инструментов), подзаголовка не будет.
+    private static func transcriptTail(_ path: String) -> String? {
+        guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
+        defer { try? handle.close() }
+        guard let size = try? handle.seekToEnd() else { return nil }
+        try? handle.seek(toOffset: size > transcriptTailBytes ? size - transcriptTailBytes : 0)
+        guard let data = try? handle.readToEnd() else { return nil }
+        return String(decoding: data, as: UTF8.self)
     }
 
     /// Кнопки ответа (PermissionRequest / AskUserQuestion). В settings.json не подключено:
