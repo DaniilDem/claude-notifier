@@ -5,7 +5,6 @@ import ClaudeHook
 /// `alerter hook` — уведомления для хуков Claude Code. См. docs/superpowers/specs/2026-09-23-claude-notifier-design.md.
 enum HookRunner {
     static let vscodeBundleID = "com.microsoft.VSCode"
-    static let claudeBundleID = "com.anthropic.claudefordesktop"
 
     static func run(arguments: [String]) -> Never {
         // Фоновая копия для неблокирующих событий: payload во временном файле.
@@ -40,8 +39,9 @@ enum HookRunner {
             : nil
         guard let spec = Presenter.spec(for: input, lastUserPrompt: prompt) else { exit(0) }
 
-        let hasClaudeApp = NSWorkspace.shared.urlForApplication(withBundleIdentifier: claudeBundleID) != nil
-        _ = InstallFakeBundleIdentifierHook(hasClaudeApp ? claudeBundleID : vscodeBundleID)
+        // Не Claude.app: с его bundle id NSUserNotificationCenter не присылает делегату
+        // ни доставку, ни клики — процесс висит без таймаута (проверено на macOS 15).
+        _ = InstallFakeBundleIdentifierHook(vscodeBundleID)
 
         let manager = NotificationManager.shared
         manager.onResult = { event in handle(event, spec: spec, input: input) }

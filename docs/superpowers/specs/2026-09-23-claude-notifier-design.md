@@ -33,8 +33,7 @@ claude-notifier hook            # читает JSON хука Claude Code из st
 
 ## Что показываем
 
-Отправитель — `com.anthropic.claudefordesktop` (имя и иконка Claude, механизм `--sender` alerter).
-Если Claude.app не установлен — `com.microsoft.VSCode`.
+Отправитель — `com.microsoft.VSCode` (механизм `--sender` alerter). Claude.app не подходит: с его bundle id делегат NSUserNotificationCenter не получает ни доставку, ни клики.
 
 | Событие | title | subtitle | message | кнопки | звук |
 |---|---|---|---|---|---|
