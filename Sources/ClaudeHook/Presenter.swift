@@ -19,7 +19,7 @@ public struct NotificationSpec: Equatable, Sendable {
     public var sound: String
     public var timeout: Int
     /// nil для блокирующих спеков (.permission, .question): их нельзя схлопывать с другими
-    /// уведомлениями сессии — свайп для закрытия репортится как `.closed` ("Deny"/"Позже").
+    /// уведомлениями сессии — свайп для закрытия репортится как `.closed` ("Deny"/"Later").
     public var group: String?
 
     /// Хук ждёт клика и отвечает Claude через stdout.
@@ -29,7 +29,7 @@ public struct NotificationSpec: Equatable, Sendable {
 public enum Presenter {
     public static let allow = "Allow"
     public static let deny = "Deny"
-    public static let later = "Позже"
+    public static let later = "Later"
     static let blockingTimeout = 45
     static let infoTimeout = 1800
 
@@ -39,13 +39,13 @@ public enum Presenter {
 
         switch input.hookEventName {
         case "Stop":
-            return NotificationSpec(kind: .info, title: "Готово · \(project)",
+            return NotificationSpec(kind: .info, title: "Done · \(project)",
                                     subtitle: lastUserPrompt.flatMap(firstLine),
-                                    message: truncate(input.lastAssistantMessage ?? "Задача завершена"),
+                                    message: truncate(input.lastAssistantMessage ?? "Task complete"),
                                     sound: "Glass", timeout: infoTimeout, group: group)
         case "Notification":
-            return NotificationSpec(kind: .info, title: "Нужен ответ · \(project)",
-                                    message: truncate(input.message ?? "Claude ждёт твоего ответа"),
+            return NotificationSpec(kind: .info, title: "Needs input · \(project)",
+                                    message: truncate(input.message ?? "Claude is waiting for your input"),
                                     sound: "Ping", timeout: infoTimeout, group: group)
         case "PermissionRequest" where input.toolName != "AskUserQuestion":
             return permissionSpec(input, project: project)
@@ -60,12 +60,12 @@ public enum Presenter {
     private static func permissionSpec(_ input: HookInput, project: String) -> NotificationSpec {
         let description = describe(input.toolInput)
         guard description.count <= 200 else {
-            return NotificationSpec(kind: .info, title: "Нужно разрешение · \(project)",
+            return NotificationSpec(kind: .info, title: "Permission needed · \(project)",
                                     subtitle: input.toolName,
                                     message: truncate(description),
                                     sound: "Ping", timeout: infoTimeout, group: "claude-\(input.sessionId)")
         }
-        return NotificationSpec(kind: .permission, title: "Разрешить? · \(project)",
+        return NotificationSpec(kind: .permission, title: "Allow? · \(project)",
                                 subtitle: input.toolName,
                                 message: truncate(description),
                                 actions: [allow], closeLabel: deny,
@@ -74,16 +74,16 @@ public enum Presenter {
 
     /// Один вопрос с одиночным выбором — кнопки. Иначе — просто уведомление.
     private static func questionSpec(_ toolInput: JSONValue?, project: String, session: String) -> NotificationSpec {
-        let title = "Вопрос · \(project)"
+        let title = "Question · \(project)"
         guard case .array(let questions)? = toolInput?["questions"], questions.count == 1,
               let question = questions.first,
               let text = question["question"]?.stringValue,
               question["multiSelect"] != .bool(true),
               case .array(let options)? = question["options"],
               case let labels = options.compactMap({ $0["label"]?.stringValue }), !labels.isEmpty,
-              // "Позже" — наша кнопка закрытия; если это ещё и вариант ответа, их не различить.
+              // "Later" — наша кнопка закрытия; если это ещё и вариант ответа, их не различить.
               !labels.contains(later) else {
-            var text = "Claude задаёт вопрос"
+            var text = "Claude has a question"
             if case .array(let questions)? = toolInput?["questions"],
                let first = questions.first?["question"]?.stringValue {
                 text = first
@@ -94,7 +94,7 @@ public enum Presenter {
         return NotificationSpec(kind: .question(text), title: title,
                                 subtitle: question["header"]?.stringValue,
                                 message: truncate(text),
-                                actions: labels, dropdownLabel: "Ответить", closeLabel: later,
+                                actions: labels, dropdownLabel: "Answer", closeLabel: later,
                                 sound: "Ping", timeout: blockingTimeout, group: nil)
     }
 

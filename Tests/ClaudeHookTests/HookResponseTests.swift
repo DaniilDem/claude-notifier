@@ -34,7 +34,7 @@ private let permissionJSON = #"{"hook_event_name":"PermissionRequest","session_i
 @Test func laterAndInfoGiveNoOutput() throws {
     let question = try parse(questionJSON)
     let questionSpec = try #require(Presenter.spec(for: question, lastUserPrompt: nil))
-    #expect(HookResponse.json(for: questionSpec, input: question, chosen: "Позже") == nil)
+    #expect(HookResponse.json(for: questionSpec, input: question, chosen: "Later") == nil)
 
     let stop = try parse(#"{"hook_event_name":"Stop","session_id":"s"}"#)
     let stopSpec = try #require(Presenter.spec(for: stop, lastUserPrompt: nil))

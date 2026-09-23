@@ -7,7 +7,7 @@ let questionJSON = #"{"hook_event_name":"PreToolUse","session_id":"s1","cwd":"/p
     let input = try parse(#"{"hook_event_name":"Stop","session_id":"s1","cwd":"/p/app","last_assistant_message":"Готово, тесты зелёные."}"#)
     let spec = try #require(Presenter.spec(for: input, lastUserPrompt: "почини тесты\nподробнее"))
     #expect(spec.kind == .info)
-    #expect(spec.title == "Готово · app")
+    #expect(spec.title == "Done · app")
     #expect(spec.subtitle == "почини тесты")
     #expect(spec.message == "Готово, тесты зелёные.")
     #expect(spec.sound == "Glass")
@@ -24,7 +24,7 @@ let questionJSON = #"{"hook_event_name":"PreToolUse","session_id":"s1","cwd":"/p
     let input = try parse(#"{"hook_event_name":"PermissionRequest","session_id":"s1","cwd":"/p/app","tool_name":"Bash","tool_input":{"command":"rm -rf build"}}"#)
     let spec = try #require(Presenter.spec(for: input, lastUserPrompt: nil))
     #expect(spec.kind == .permission)
-    #expect(spec.title == "Разрешить? · app")
+    #expect(spec.title == "Allow? · app")
     #expect(spec.subtitle == "Bash")
     #expect(spec.message == "rm -rf build")
     #expect(spec.actions == ["Allow"])
@@ -49,7 +49,7 @@ let questionJSON = #"{"hook_event_name":"PreToolUse","session_id":"s1","cwd":"/p
     let input = try parse(#"{"hook_event_name":"PermissionRequest","session_id":"s1","cwd":"/p/app","tool_name":"Bash","tool_input":{"command":"\#(longCommand)"}}"#)
     let spec = try #require(Presenter.spec(for: input, lastUserPrompt: nil))
     #expect(spec.kind == .info)
-    #expect(spec.title == "Нужно разрешение · app")
+    #expect(spec.title == "Permission needed · app")
     #expect(spec.subtitle == "Bash")
     #expect(spec.sound == "Ping")
     #expect(spec.group == "claude-s1")
@@ -61,13 +61,13 @@ let questionJSON = #"{"hook_event_name":"PreToolUse","session_id":"s1","cwd":"/p
     #expect(spec.kind == .question("Какой цвет?"))
     #expect(spec.subtitle == "Цвет")
     #expect(spec.actions == ["Красный", "Синий"])
-    #expect(spec.dropdownLabel == "Ответить")
-    #expect(spec.closeLabel == "Позже")
+    #expect(spec.dropdownLabel == "Answer")
+    #expect(spec.closeLabel == "Later")
     #expect(spec.blocking)
 }
 
 @Test func questionWithLaterOptionFallsBackToInfo() throws {
-    let json = #"{"hook_event_name":"PreToolUse","session_id":"s","cwd":"/p/app","tool_name":"AskUserQuestion","tool_input":{"questions":[{"question":"Когда?","options":[{"label":"Сейчас"},{"label":"Позже"}]}]}}"#
+    let json = #"{"hook_event_name":"PreToolUse","session_id":"s","cwd":"/p/app","tool_name":"AskUserQuestion","tool_input":{"questions":[{"question":"When?","options":[{"label":"Now"},{"label":"Later"}]}]}}"#
     let spec = try #require(Presenter.spec(for: try parse(json), lastUserPrompt: nil))
     #expect(spec.kind == .info)
 }
@@ -76,7 +76,7 @@ let questionJSON = #"{"hook_event_name":"PreToolUse","session_id":"s1","cwd":"/p
     let input = try parse(#"{"hook_event_name":"PreToolUse","session_id":"s","cwd":"/p/app","tool_name":"AskUserQuestion","tool_input":{"questions":[{"question":"A?","options":[{"label":"x"}]},{"question":"B?","options":[{"label":"y"}]}]}}"#)
     let spec = try #require(Presenter.spec(for: input, lastUserPrompt: nil))
     #expect(spec.kind == .info)
-    #expect(spec.title == "Вопрос · app")
+    #expect(spec.title == "Question · app")
     #expect(spec.message == "A?")
 }
 
